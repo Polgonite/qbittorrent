@@ -237,6 +237,10 @@ namespace BitTorrent
         virtual void setTorrentExportDirectory(const Path &path) = 0;
         virtual Path finishedTorrentExportDirectory() const = 0;
         virtual void setFinishedTorrentExportDirectory(const Path &path) = 0;
+        virtual bool isExportFastresumeEnabled() const = 0;
+        virtual void setExportFastresumeEnabled(bool enabled) = 0;
+        virtual bool isExportFinishedFastresumeEnabled() const = 0;
+        virtual void setExportFinishedFastresumeEnabled(bool enabled) = 0;
 
         virtual bool isAddTrackersFromURLEnabled() const = 0;
         virtual void setAddTrackersFromURLEnabled(bool enabled) = 0;
