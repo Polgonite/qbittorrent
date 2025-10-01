@@ -442,7 +442,7 @@ void TorrentFilesWatcher::Worker::processFolder(const Path &path, const Path &wa
                     const Path fastresumeFilePath = filePath.removedExtension(u".torrent"_s) + u".fastresume";
                     if (fastresumeFilePath.exists())
                     {
-                        // Load the fastresume file
+                        // Load the fastresume file to validate it
                         const auto resumeDataReadResult = Utils::IO::readFile(fastresumeFilePath, -1);
                         if (resumeDataReadResult)
                         {
@@ -453,9 +453,23 @@ void TorrentFilesWatcher::Worker::processFolder(const Path &path, const Path &wa
                             
                             if (!ec && (resumeDataRoot.type() == lt::bdecode_node::dict_t))
                             {
-                                // Successfully loaded resume data, set skipChecking flag
-                                addTorrentParams.skipChecking = true;
-                                LogMsg(tr("Found resume data for torrent file: %1").arg(filePath.toString()));
+                                // Successfully loaded and validated resume data
+                                // Copy it to the BT_backup directory so the session can use it
+                                const BitTorrent::InfoHash infoHash = loadResult.value().infoHash();
+                                const BitTorrent::TorrentID torrentID = BitTorrent::TorrentID::fromInfoHash(infoHash);
+                                const Path resumeDataDir = specialFolderLocation(SpecialFolder::Data) / Path(u"BT_backup"_s);
+                                const Path destFastresumePath = resumeDataDir / Path(torrentID.toString() + u".fastresume");
+                                
+                                if (Utils::Fs::copyFile(fastresumeFilePath, destFastresumePath))
+                                {
+                                    // Set skipChecking flag so the torrent won't be rechecked
+                                    addTorrentParams.skipChecking = true;
+                                    LogMsg(tr("Imported resume data for torrent file: %1").arg(filePath.toString()));
+                                }
+                                else
+                                {
+                                    LogMsg(tr("Failed to copy resume data for torrent file: %1").arg(filePath.toString()), Log::WARNING);
+                                }
                             }
                             else
                             {
@@ -463,7 +477,7 @@ void TorrentFilesWatcher::Worker::processFolder(const Path &path, const Path &wa
                             }
                         }
                         
-                        // Remove the fastresume file alongside the torrent file
+                        // Remove the fastresume file from the watched folder
                         Utils::Fs::removeFile(fastresumeFilePath);
                     }
                 }
