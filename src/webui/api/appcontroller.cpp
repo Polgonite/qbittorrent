@@ -180,6 +180,8 @@ void AppController::preferencesAction()
     data[u"use_category_paths_in_manual_mode"_s] = session->useCategoryPathsInManualMode();
     data[u"export_dir"_s] = session->torrentExportDirectory().toString();
     data[u"export_dir_fin"_s] = session->finishedTorrentExportDirectory().toString();
+    data[u"export_fastresume_enabled"_s] = session->isExportFastresumeEnabled();
+    data[u"export_fastresume_fin_enabled"_s] = session->isExportFinishedFastresumeEnabled();
 
     // TODO: The following code is deprecated. Delete it once replaced by updated API method.
     // === BEGIN DEPRECATED CODE === //
@@ -604,6 +606,10 @@ void AppController::setPreferencesAction()
         session->setTorrentExportDirectory(Path(it.value().toString()));
     if (hasKey(u"export_dir_fin"_s))
         session->setFinishedTorrentExportDirectory(Path(it.value().toString()));
+    if (hasKey(u"export_fastresume_enabled"_s))
+        session->setExportFastresumeEnabled(it.value().toBool());
+    if (hasKey(u"export_fastresume_fin_enabled"_s))
+        session->setExportFinishedFastresumeEnabled(it.value().toBool());
 
     // TODO: The following code is deprecated. Delete it once replaced by updated API method.
     // === BEGIN DEPRECATED CODE === //
