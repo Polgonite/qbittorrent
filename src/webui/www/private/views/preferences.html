@@ -266,12 +266,26 @@
                     </td>
                 </tr>
                 <tr>
+                    <td></td>
+                    <td>
+                        <input type="checkbox" id="exportdir_fastresume_checkbox">
+                        <label for="exportdir_fastresume_checkbox">QBT_TR(Also copy .fastresume files)QBT_TR[CONTEXT=OptionsDialog]</label>
+                    </td>
+                </tr>
+                <tr>
                     <td>
                         <input type="checkbox" id="exportdirfin_checkbox" onclick="qBittorrent.Preferences.updateExportDirFinEnabled();">
                         <label id="exportDirFinLabel" for="exportdirfin_checkbox">QBT_TR(Copy .torrent files for finished downloads to:)QBT_TR[CONTEXT=OptionsDialog]</label>
                     </td>
                     <td>
                         <input type="text" id="exportdirfin_text" class="pathDirectory" autocorrect="off" autocapitalize="none" aria-labelledby="exportDirFinLabel">
+                    </td>
+                </tr>
+                <tr>
+                    <td></td>
+                    <td>
+                        <input type="checkbox" id="exportdirfin_fastresume_checkbox">
+                        <label for="exportdirfin_fastresume_checkbox">QBT_TR(Also copy .fastresume files)QBT_TR[CONTEXT=OptionsDialog]</label>
                     </td>
                 </tr>
             </tbody>
@@ -1919,11 +1933,13 @@ Use ';' to split multiple entries. Can use wildcard '*'.)QBT_TR[CONTEXT=OptionsD
         const updateExportDirEnabled = () => {
             const isExportDirEnabled = document.getElementById("exportdir_checkbox").checked;
             document.getElementById("exportdir_text").disabled = !isExportDirEnabled;
+            document.getElementById("exportdir_fastresume_checkbox").disabled = !isExportDirEnabled;
         };
 
         const updateExportDirFinEnabled = () => {
             const isExportDirFinEnabled = document.getElementById("exportdirfin_checkbox").checked;
             document.getElementById("exportdirfin_text").disabled = !isExportDirFinEnabled;
+            document.getElementById("exportdirfin_fastresume_checkbox").disabled = !isExportDirFinEnabled;
         };
 
         const updateMailNotification = () => {
@@ -2310,6 +2326,7 @@ Use ';' to split multiple entries. Can use wildcard '*'.)QBT_TR[CONTEXT=OptionsD
                         document.getElementById("exportdir_checkbox").checked = false;
                         document.getElementById("exportdir_text").value = "";
                     }
+                    document.getElementById("exportdir_fastresume_checkbox").checked = pref.export_fastresume_enabled;
                     updateExportDirEnabled();
                     if (pref.export_dir_fin !== "") {
                         document.getElementById("exportdirfin_checkbox").checked = true;
@@ -2319,6 +2336,7 @@ Use ';' to split multiple entries. Can use wildcard '*'.)QBT_TR[CONTEXT=OptionsD
                         document.getElementById("exportdirfin_checkbox").checked = false;
                         document.getElementById("exportdirfin_text").value = "";
                     }
+                    document.getElementById("exportdirfin_fastresume_checkbox").checked = pref.export_fastresume_fin_enabled;
                     updateExportDirFinEnabled();
 
                     // Automatically add torrents from
@@ -2717,10 +2735,12 @@ Use ';' to split multiple entries. Can use wildcard '*'.)QBT_TR[CONTEXT=OptionsD
                 settings["export_dir"] = document.getElementById("exportdir_text").value;
             else
                 settings["export_dir"] = "";
+            settings["export_fastresume_enabled"] = document.getElementById("exportdir_fastresume_checkbox").checked;
             if (document.getElementById("exportdirfin_checkbox").checked)
                 settings["export_dir_fin"] = document.getElementById("exportdirfin_text").value;
             else
                 settings["export_dir_fin"] = "";
+            settings["export_fastresume_fin_enabled"] = document.getElementById("exportdirfin_fastresume_checkbox").checked;
 
             // Automatically add torrents from
             settings["scan_dirs"] = getWatchedFolders();
