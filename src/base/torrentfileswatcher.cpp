@@ -47,6 +47,7 @@
 #include <QVariant>
 
 #include "base/algorithm.h"
+#include "base/bittorrent/infohash.h"
 #include "base/bittorrent/torrentcontentlayout.h"
 #include "base/bittorrent/session.h"
 #include "base/bittorrent/torrent.h"
