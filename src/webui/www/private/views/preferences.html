@@ -299,6 +299,8 @@
                 <tr>
                     <th scope="col">QBT_TR(Monitored Folder)QBT_TR[CONTEXT=ScanFoldersModel]</th>
                     <th scope="col">QBT_TR(Override Save Location)QBT_TR[CONTEXT=ScanFoldersModel]</th>
+                    <th scope="col" title="Will watch the folder and all its subfolders. In Manual torrent management mode it will also add subfolder name to the selected Save path.">QBT_TR(Recursive mode)QBT_TR[CONTEXT=WatchedFolderOptionsDialog]</th>
+                    <th scope="col" title="If a .fastresume file with the same name exists in the watched folder, it will be imported and the torrent will not be rechecked.">QBT_TR(Import .fastresume files)QBT_TR[CONTEXT=WatchedFolderOptionsDialog]</th>
                 </tr>
             </thead>
             <tbody></tbody>
@@ -1868,7 +1870,7 @@ Use ';' to split multiple entries. Can use wildcard '*'.)QBT_TR[CONTEXT=OptionsD
             }
         };
 
-        const addWatchFolder = (folder = "", sel = "default_folder", other = "") => {
+        const addWatchFolder = (folder = "", sel = "default_folder", other = "", recursive = false, importFastresume = false) => {
             const pos = document.getElementById("watched_folders_tab").getChildren("tbody")[0].getChildren("tr").length;
             const myinput = `<input id='text_watch_${pos}' type='text' value='${folder}'>`;
             const disableInput = (sel !== "other");
@@ -1881,8 +1883,10 @@ Use ';' to split multiple entries. Can use wildcard '*'.)QBT_TR[CONTEXT=OptionsD
                 + `<input id='cb_watch_txt_${pos}' type='text' ${disableInput ? "hidden " : ""}/>`
                 + `<img src='images/list-add.svg' id='addFolderImg_${pos}' alt='Add' style='padding-left:170px;width:16px;cursor:pointer;' onclick='qBittorrent.Preferences.addWatchFolder();'>`
                 + "</div>";
+            const recursiveCheckbox = `<input id='cb_watch_recursive_${pos}' type='checkbox' ${recursive ? "checked" : ""}>`;
+            const importFastresumeCheckbox = `<input id='cb_watch_import_fastresume_${pos}' type='checkbox' ${importFastresume ? "checked" : ""}>`;
 
-            watchedFoldersTable.push([myinput, mycb]);
+            watchedFoldersTable.push([myinput, mycb, recursiveCheckbox, importFastresumeCheckbox]);
             document.getElementById(`cb_watch_${pos}`).value = sel;
             if (disableInput) {
                 const elt = document.getElementById(`cb_watch_${pos}`);
@@ -1906,20 +1910,27 @@ Use ';' to split multiple entries. Can use wildcard '*'.)QBT_TR[CONTEXT=OptionsD
 
                 const sel = document.getElementById(`cb_watch_${i}`).value.trim();
 
-                let other;
+                let savePath;
                 switch (sel) {
                     case "watch_folder":
-                        other = 0;
+                        savePath = 0;
                         break;
                     case "default_folder":
-                        other = 1;
+                        savePath = 1;
                         break;
                     case "other":
-                        other = document.getElementById(`cb_watch_txt_${i}`).value.trim();
+                        savePath = document.getElementById(`cb_watch_txt_${i}`).value.trim();
                         break;
                 }
 
-                folders[fpath] = other;
+                const recursive = document.getElementById(`cb_watch_recursive_${i}`).checked;
+                const importFastresume = document.getElementById(`cb_watch_import_fastresume_${i}`).checked;
+
+                folders[fpath] = {
+                    save_path: savePath,
+                    recursive: recursive,
+                    import_fastresume: importFastresume
+                };
             }
 
             return folders;
@@ -2344,14 +2355,40 @@ Use ';' to split multiple entries. Can use wildcard '*'.)QBT_TR[CONTEXT=OptionsD
                         if (!Object.hasOwn(pref.scan_dirs, folder))
                             continue;
 
-                        const folderType = pref.scan_dirs[folder];
+                        const folderData = pref.scan_dirs[folder];
                         let sel = "other";
-                        let other = folderType;
-                        if (typeof folderType === "number") {
-                            sel = (folderType === 0) ? "watch_folder" : "default_folder";
-                            other = "";
+                        let other = "";
+                        let recursive = false;
+                        let importFastresume = false;
+
+                        // Check if it's the new format (object) or old format (number/string)
+                        if (typeof folderData === "object" && folderData !== null) {
+                            // New format: {save_path, recursive, import_fastresume}
+                            const savePath = folderData.save_path;
+                            if (typeof savePath === "number") {
+                                sel = (savePath === 0) ? "watch_folder" : "default_folder";
+                                other = "";
+                            }
+                            else {
+                                sel = "other";
+                                other = savePath;
+                            }
+                            recursive = folderData.recursive || false;
+                            importFastresume = folderData.import_fastresume || false;
                         }
-                        addWatchFolder(folder, sel, other);
+                        else {
+                            // Legacy format: number or string
+                            if (typeof folderData === "number") {
+                                sel = (folderData === 0) ? "watch_folder" : "default_folder";
+                                other = "";
+                            }
+                            else {
+                                sel = "other";
+                                other = folderData;
+                            }
+                        }
+
+                        addWatchFolder(folder, sel, other, recursive, importFastresume);
                     }
                     addWatchFolder();
 
