@@ -51,6 +51,7 @@ public:
     {
         BitTorrent::AddTorrentParams addTorrentParams;
         bool recursive = false;
+        bool importFastresume = false;
     };
 
     static void initInstance();

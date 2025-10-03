@@ -31,6 +31,9 @@
 
 #include <chrono>
 
+#include <libtorrent/bdecode.hpp>
+#include <libtorrent/read_resume_data.hpp>
+
 #include <QtAssert>
 #include <QDir>
 #include <QDirIterator>
@@ -44,12 +47,14 @@
 #include <QVariant>
 
 #include "base/algorithm.h"
+#include "base/bittorrent/infohash.h"
 #include "base/bittorrent/torrentcontentlayout.h"
 #include "base/bittorrent/session.h"
 #include "base/bittorrent/torrent.h"
 #include "base/exceptions.h"
 #include "base/global.h"
 #include "base/logger.h"
+#include "base/preferences.h"
 #include "base/profile.h"
 #include "base/settingsstorage.h"
 #include "base/tagset.h"
@@ -65,6 +70,7 @@ const QString CONF_FILE_NAME = u"watched_folders.json"_s;
 
 const QString OPTION_ADDTORRENTPARAMS = u"add_torrent_params"_s;
 const QString OPTION_RECURSIVE = u"recursive"_s;
+const QString OPTION_IMPORTFASTRESUME = u"import_fastresume"_s;
 
 namespace
 {
@@ -73,6 +79,7 @@ namespace
         TorrentFilesWatcher::WatchedFolderOptions options;
         options.addTorrentParams = BitTorrent::parseAddTorrentParams(jsonObj.value(OPTION_ADDTORRENTPARAMS).toObject());
         options.recursive = jsonObj.value(OPTION_RECURSIVE).toBool();
+        options.importFastresume = jsonObj.value(OPTION_IMPORTFASTRESUME).toBool();
 
         return options;
     }
@@ -80,7 +87,8 @@ namespace
     QJsonObject serializeWatchedFolderOptions(const TorrentFilesWatcher::WatchedFolderOptions &options)
     {
         return {{OPTION_ADDTORRENTPARAMS, BitTorrent::serializeAddTorrentParams(options.addTorrentParams)},
-                {OPTION_RECURSIVE, options.recursive}};
+                {OPTION_RECURSIVE, options.recursive},
+                {OPTION_IMPORTFASTRESUME, options.importFastresume}};
     }
 }
 
@@ -429,6 +437,52 @@ void TorrentFilesWatcher::Worker::processFolder(const Path &path, const Path &wa
         {
             if (const auto loadResult = BitTorrent::TorrentDescriptor::loadFromFile(filePath))
             {
+                // Check if there's a corresponding .fastresume file and if importFastresume is enabled
+                if (options.importFastresume)
+                {
+                    const Path fastresumeFilePath = filePath.removedExtension(u".torrent"_s) + u".fastresume";
+                    if (fastresumeFilePath.exists())
+                    {
+                        // Load the fastresume file to validate it
+                        const auto resumeDataReadResult = Utils::IO::readFile(fastresumeFilePath, -1);
+                        if (resumeDataReadResult)
+                        {
+                            lt::error_code ec;
+                            const auto *pref = Preferences::instance();
+                            const lt::bdecode_node resumeDataRoot = lt::bdecode(resumeDataReadResult.value(), ec
+                                    , nullptr, pref->getBdecodeDepthLimit(), pref->getBdecodeTokenLimit());
+                            
+                            if (!ec && (resumeDataRoot.type() == lt::bdecode_node::dict_t))
+                            {
+                                // Successfully loaded and validated resume data
+                                // Copy it to the BT_backup directory so the session can use it
+                                const BitTorrent::InfoHash infoHash = loadResult.value().infoHash();
+                                const BitTorrent::TorrentID torrentID = BitTorrent::TorrentID::fromInfoHash(infoHash);
+                                const Path resumeDataDir = specialFolderLocation(SpecialFolder::Data) / Path(u"BT_backup"_s);
+                                const Path destFastresumePath = resumeDataDir / Path(torrentID.toString() + u".fastresume");
+                                
+                                if (Utils::Fs::copyFile(fastresumeFilePath, destFastresumePath))
+                                {
+                                    // Set skipChecking flag so the torrent won't be rechecked
+                                    addTorrentParams.skipChecking = true;
+                                    LogMsg(tr("Imported resume data for torrent file: %1").arg(filePath.toString()));
+                                }
+                                else
+                                {
+                                    LogMsg(tr("Failed to copy resume data for torrent file: %1").arg(filePath.toString()), Log::WARNING);
+                                }
+                            }
+                            else
+                            {
+                                LogMsg(tr("Failed to parse resume data for torrent file: %1").arg(filePath.toString()), Log::WARNING);
+                            }
+                        }
+                        
+                        // Remove the fastresume file from the watched folder
+                        Utils::Fs::removeFile(fastresumeFilePath);
+                    }
+                }
+                
                 emit torrentFound(loadResult.value(), addTorrentParams);
                 Utils::Fs::removeFile(filePath);
             }

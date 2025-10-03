@@ -217,6 +217,10 @@ namespace BitTorrent
         void setTorrentExportDirectory(const Path &path) override;
         Path finishedTorrentExportDirectory() const override;
         void setFinishedTorrentExportDirectory(const Path &path) override;
+        bool isExportFastresumeEnabled() const override;
+        void setExportFastresumeEnabled(bool enabled) override;
+        bool isExportFinishedFastresumeEnabled() const override;
+        void setExportFinishedFastresumeEnabled(bool enabled) override;
 
         int globalDownloadSpeedLimit() const override;
         void setGlobalDownloadSpeedLimit(int limit) override;
@@ -577,6 +581,7 @@ namespace BitTorrent
 
         void updateSeedingLimitTimer();
         void exportTorrentFile(const Torrent *torrent, const Path &folderPath);
+        void exportFastresumeFile(const Torrent *torrent, const Path &folderPath);
 
         void handleAlert(lt::alert *alert);
         void handleAddTorrentAlert(const lt::add_torrent_alert *alert);
@@ -727,6 +732,8 @@ namespace BitTorrent
         CachedSettingValue<bool> m_isPreallocationEnabled;
         CachedSettingValue<Path> m_torrentExportDirectory;
         CachedSettingValue<Path> m_finishedTorrentExportDirectory;
+        CachedSettingValue<bool> m_isExportFastresumeEnabled;
+        CachedSettingValue<bool> m_isExportFinishedFastresumeEnabled;
         CachedSettingValue<int> m_globalDownloadSpeedLimit;
         CachedSettingValue<int> m_globalUploadSpeedLimit;
         CachedSettingValue<int> m_altGlobalDownloadSpeedLimit;
