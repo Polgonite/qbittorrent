@@ -3001,11 +3001,12 @@ bool SessionImpl::addTorrent_impl(const TorrentDescriptor &source, const AddTorr
                 // The following is useless for newly added magnet
                 if (torrent->hasMetadata())
                 {
-                    if (!torrentExportDirectory().isEmpty())
-                        exportTorrentFile(torrent, torrentExportDirectory());
-                    
+                    // Export fastresume first, then torrent file to avoid race conditions in watched folders
                     if (isExportFastresumeEnabled() && !torrentExportDirectory().isEmpty())
                         exportFastresumeFile(torrent, torrentExportDirectory());
+                    
+                    if (!torrentExportDirectory().isEmpty())
+                        exportTorrentFile(torrent, torrentExportDirectory());
                 }
             }
         });
@@ -5358,11 +5359,12 @@ void SessionImpl::handleTorrentUrlSeedsRemoved(TorrentImpl *const torrent, const
 
 void SessionImpl::handleTorrentMetadataReceived(TorrentImpl *const torrent)
 {
-    if (!torrentExportDirectory().isEmpty())
-        exportTorrentFile(torrent, torrentExportDirectory());
-    
+    // Export fastresume first, then torrent file to avoid race conditions in watched folders
     if (isExportFastresumeEnabled() && !torrentExportDirectory().isEmpty())
         exportFastresumeFile(torrent, torrentExportDirectory());
+    
+    if (!torrentExportDirectory().isEmpty())
+        exportTorrentFile(torrent, torrentExportDirectory());
 
     emit torrentMetadataReceived(torrent);
 }
@@ -5550,11 +5552,12 @@ void SessionImpl::processPendingFinishedTorrents()
         LogMsg(tr("Torrent download finished. Torrent: \"%1\"").arg(torrent->name()));
         emit torrentFinished(torrent);
 
-        if (const Path exportPath = finishedTorrentExportDirectory(); !exportPath.isEmpty())
-            exportTorrentFile(torrent, exportPath);
-        
+        // Export fastresume first, then torrent file to avoid race conditions in watched folders
         if (isExportFinishedFastresumeEnabled() && !finishedTorrentExportDirectory().isEmpty())
             exportFastresumeFile(torrent, finishedTorrentExportDirectory());
+        
+        if (const Path exportPath = finishedTorrentExportDirectory(); !exportPath.isEmpty())
+            exportTorrentFile(torrent, exportPath);
 
         processTorrentShareLimits(torrent);
     }
