@@ -476,7 +476,7 @@ void TorrentFilesWatcher::Worker::processFolder(const Path &path, const Path &wa
                                     const Path resumeDataDir = specialFolderLocation(SpecialFolder::Data) / Path(u"BT_backup"_s);
                                     const Path destFastresumePath = resumeDataDir / Path(torrentID.toString() + u".fastresume");
                                     
-                                    const auto writeResult = Utils::IO::writeFile(destFastresumePath
+                                    const auto writeResult = Utils::IO::saveToFile(destFastresumePath
                                             , QByteArray(resumeBuffer.data(), static_cast<QByteArray::size_type>(resumeBuffer.size())));
                                     
                                     if (writeResult)
