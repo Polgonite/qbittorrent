@@ -467,6 +467,11 @@ void TorrentFilesWatcher::Worker::processFolder(const Path &path, const Path &wa
                                     
                                     // Write the modified resume data
                                     lt::entry resumeEntry = lt::write_resume_data(resumeParams);
+                                    
+                                    // Add qBittorrent-specific field to mark torrent as having finished status
+                                    // This is critical for the torrent to be recognized as complete/seeding
+                                    resumeEntry["qBt-seedStatus"] = 1;
+                                    
                                     std::vector<char> resumeBuffer;
                                     lt::bencode(std::back_inserter(resumeBuffer), resumeEntry);
                                     
