@@ -33,6 +33,7 @@
 
 #include <libtorrent/bdecode.hpp>
 #include <libtorrent/read_resume_data.hpp>
+#include <libtorrent/write_resume_data.hpp>
 
 #include <QtAssert>
 #include <QDir>
@@ -455,21 +456,43 @@ void TorrentFilesWatcher::Worker::processFolder(const Path &path, const Path &wa
                             if (!ec && (resumeDataRoot.type() == lt::bdecode_node::dict_t))
                             {
                                 // Successfully loaded and validated resume data
-                                // Copy it to the BT_backup directory so the session can use it
-                                const BitTorrent::InfoHash infoHash = loadResult.value().infoHash();
-                                const BitTorrent::TorrentID torrentID = BitTorrent::TorrentID::fromInfoHash(infoHash);
-                                const Path resumeDataDir = specialFolderLocation(SpecialFolder::Data) / Path(u"BT_backup"_s);
-                                const Path destFastresumePath = resumeDataDir / Path(torrentID.toString() + u".fastresume");
+                                // Parse the resume data and add seed_mode flag
+                                lt::error_code parseEc;
+                                lt::add_torrent_params resumeParams = lt::read_resume_data(resumeDataRoot, parseEc);
                                 
-                                if (Utils::Fs::copyFile(fastresumeFilePath, destFastresumePath))
+                                if (!parseEc)
                                 {
-                                    // Set skipChecking flag so the torrent won't be rechecked
-                                    addTorrentParams.skipChecking = true;
-                                    LogMsg(tr("Imported resume data for torrent file: %1").arg(filePath.toString()));
+                                    // Set seed_mode flag to skip checking
+                                    resumeParams.flags |= lt::torrent_flags::seed_mode;
+                                    
+                                    // Write the modified resume data
+                                    lt::entry resumeEntry = lt::write_resume_data(resumeParams);
+                                    std::vector<char> resumeBuffer;
+                                    lt::bencode(std::back_inserter(resumeBuffer), resumeEntry);
+                                    
+                                    // Save to BT_backup directory
+                                    const BitTorrent::InfoHash infoHash = loadResult.value().infoHash();
+                                    const BitTorrent::TorrentID torrentID = BitTorrent::TorrentID::fromInfoHash(infoHash);
+                                    const Path resumeDataDir = specialFolderLocation(SpecialFolder::Data) / Path(u"BT_backup"_s);
+                                    const Path destFastresumePath = resumeDataDir / Path(torrentID.toString() + u".fastresume");
+                                    
+                                    const auto writeResult = Utils::IO::writeFile(destFastresumePath
+                                            , QByteArray(resumeBuffer.data(), static_cast<QByteArray::size_type>(resumeBuffer.size())));
+                                    
+                                    if (writeResult)
+                                    {
+                                        // Set skipChecking flag so the torrent won't be rechecked
+                                        addTorrentParams.skipChecking = true;
+                                        LogMsg(tr("Imported resume data for torrent file: %1").arg(filePath.toString()));
+                                    }
+                                    else
+                                    {
+                                        LogMsg(tr("Failed to write resume data for torrent file: %1").arg(filePath.toString()), Log::WARNING);
+                                    }
                                 }
                                 else
                                 {
-                                    LogMsg(tr("Failed to copy resume data for torrent file: %1").arg(filePath.toString()), Log::WARNING);
+                                    LogMsg(tr("Failed to parse resume data for torrent file: %1").arg(filePath.toString()), Log::WARNING);
                                 }
                             }
                             else
