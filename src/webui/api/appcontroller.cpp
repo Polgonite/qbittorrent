@@ -173,6 +173,8 @@ void AppController::preferencesAction()
     data[u"use_category_paths_in_manual_mode"_s] = session->useCategoryPathsInManualMode();
     data[u"export_dir"_s] = session->torrentExportDirectory().toString();
     data[u"export_dir_fin"_s] = session->finishedTorrentExportDirectory().toString();
+    data[u"export_fastresume_enabled"_s] = session->isExportFastresumeEnabled();
+    data[u"export_fastresume_fin_enabled"_s] = session->isExportFinishedFastresumeEnabled();
 
     // TODO: The following code is deprecated. Delete it once replaced by updated API method.
     // === BEGIN DEPRECATED CODE === //
@@ -182,13 +184,21 @@ void AppController::preferencesAction()
     for (auto i = watchedFolders.cbegin(); i != watchedFolders.cend(); ++i)
     {
         const Path &watchedFolder = i.key();
-        const BitTorrent::AddTorrentParams params = i.value().addTorrentParams;
+        const TorrentFilesWatcher::WatchedFolderOptions &options = i.value();
+        const BitTorrent::AddTorrentParams params = options.addTorrentParams;
+
+        QJsonObject folderOptions;
         if (params.savePath.isEmpty())
-            nativeDirs.insert(watchedFolder.toString(), 1);
+            folderOptions[u"save_path"_s] = 1;
         else if (params.savePath == watchedFolder)
-            nativeDirs.insert(watchedFolder.toString(), 0);
+            folderOptions[u"save_path"_s] = 0;
         else
-            nativeDirs.insert(watchedFolder.toString(), params.savePath.toString());
+            folderOptions[u"save_path"_s] = params.savePath.toString();
+
+        folderOptions[u"recursive"_s] = options.recursive;
+        folderOptions[u"import_fastresume"_s] = options.importFastresume;
+
+        nativeDirs.insert(watchedFolder.toString(), folderOptions);
     }
     data[u"scan_dirs"_s] = nativeDirs;
     // === END DEPRECATED CODE === //
@@ -595,6 +605,10 @@ void AppController::setPreferencesAction()
         session->setTorrentExportDirectory(Path(it.value().toString()));
     if (hasKey(u"export_dir_fin"_s))
         session->setFinishedTorrentExportDirectory(Path(it.value().toString()));
+    if (hasKey(u"export_fastresume_enabled"_s))
+        session->setExportFastresumeEnabled(it.value().toBool());
+    if (hasKey(u"export_fastresume_fin_enabled"_s))
+        session->setExportFinishedFastresumeEnabled(it.value().toBool());
 
     // TODO: The following code is deprecated. Delete it once replaced by updated API method.
     // === BEGIN DEPRECATED CODE === //
@@ -612,21 +626,51 @@ void AppController::setPreferencesAction()
                 TorrentFilesWatcher::WatchedFolderOptions options = fsWatcher->folders().value(watchedFolder);
                 BitTorrent::AddTorrentParams &params = options.addTorrentParams;
 
-                bool isInt = false;
-                const int intVal = i.value().toInt(&isInt);
-                if (isInt)
+                // Check if value is an object with options
+                const QVariantMap valueMap = i.value().toMap();
+                if (!valueMap.isEmpty())
                 {
-                    if (intVal == 0)
+                    // New format: {save_path: ..., recursive: ..., import_fastresume: ...}
+                    const QVariant savePathValue = valueMap.value(u"save_path"_s);
+                    bool isInt = false;
+                    const int intVal = savePathValue.toInt(&isInt);
+                    if (isInt)
                     {
-                        params.savePath = watchedFolder;
+                        if (intVal == 0)
+                        {
+                            params.savePath = watchedFolder;
+                            params.useAutoTMM = false;
+                        }
+                    }
+                    else if (!savePathValue.toString().isEmpty())
+                    {
+                        const Path customSavePath {savePathValue.toString()};
+                        params.savePath = customSavePath;
                         params.useAutoTMM = false;
                     }
+
+                    options.recursive = valueMap.value(u"recursive"_s, false).toBool();
+                    options.importFastresume = valueMap.value(u"import_fastresume"_s, false).toBool();
                 }
                 else
                 {
-                    const Path customSavePath {i.value().toString()};
-                    params.savePath = customSavePath;
-                    params.useAutoTMM = false;
+                    // Legacy format: integer or string
+                    bool isInt = false;
+                    const int intVal = i.value().toInt(&isInt);
+                    if (isInt)
+                    {
+                        if (intVal == 0)
+                        {
+                            params.savePath = watchedFolder;
+                            params.useAutoTMM = false;
+                        }
+                    }
+                    else
+                    {
+                        const Path customSavePath {i.value().toString()};
+                        params.savePath = customSavePath;
+                        params.useAutoTMM = false;
+                    }
                 }
 
                 fsWatcher->setWatchedFolder(watchedFolder, options);

@@ -482,6 +482,8 @@ SessionImpl::SessionImpl(QObject *parent)
     , m_isPreallocationEnabled(BITTORRENT_SESSION_KEY(u"Preallocation"_s), false)
     , m_torrentExportDirectory(BITTORRENT_SESSION_KEY(u"TorrentExportDirectory"_s))
     , m_finishedTorrentExportDirectory(BITTORRENT_SESSION_KEY(u"FinishedTorrentExportDirectory"_s))
+    , m_isExportFastresumeEnabled(BITTORRENT_SESSION_KEY(u"ExportFastresumeEnabled"_s), false)
+    , m_isExportFinishedFastresumeEnabled(BITTORRENT_SESSION_KEY(u"ExportFinishedFastresumeEnabled"_s), false)
     , m_globalDownloadSpeedLimit(BITTORRENT_SESSION_KEY(u"GlobalDLSpeedLimit"_s), 0, lowerLimited(0))
     , m_globalUploadSpeedLimit(BITTORRENT_SESSION_KEY(u"GlobalUPSpeedLimit"_s), 0, lowerLimited(0))
     , m_altGlobalDownloadSpeedLimit(BITTORRENT_SESSION_KEY(u"AlternativeGlobalDLSpeedLimit"_s), 10, lowerLimited(0))
@@ -834,6 +836,28 @@ void SessionImpl::setTorrentExportDirectory(const Path &path)
 Path SessionImpl::finishedTorrentExportDirectory() const
 {
     return m_finishedTorrentExportDirectory;
+}
+
+bool SessionImpl::isExportFastresumeEnabled() const
+{
+    return m_isExportFastresumeEnabled;
+}
+
+void SessionImpl::setExportFastresumeEnabled(const bool enabled)
+{
+    if (enabled != isExportFastresumeEnabled())
+        m_isExportFastresumeEnabled = enabled;
+}
+
+bool SessionImpl::isExportFinishedFastresumeEnabled() const
+{
+    return m_isExportFinishedFastresumeEnabled;
+}
+
+void SessionImpl::setExportFinishedFastresumeEnabled(const bool enabled)
+{
+    if (enabled != isExportFinishedFastresumeEnabled())
+        m_isExportFinishedFastresumeEnabled = enabled;
 }
 
 void SessionImpl::setFinishedTorrentExportDirectory(const Path &path)
@@ -3163,6 +3187,39 @@ void SessionImpl::exportTorrentFile(const Torrent *torrent, const Path &folderPa
     }
 }
 
+void SessionImpl::exportFastresumeFile(const Torrent *torrent, const Path &folderPath)
+{
+    if (!folderPath.exists() && !Utils::Fs::mkpath(folderPath))
+        return;
+
+    const QString validName = Utils::Fs::toValidFileName(torrent->name());
+    QString fastresumeExportFilename = u"%1.fastresume"_s.arg(validName);
+    Path newFastresumePath = folderPath / Path(fastresumeExportFilename);
+    int counter = 0;
+    while (newFastresumePath.exists())
+    {
+        // Append number to fastresume name to make it unique
+        fastresumeExportFilename = u"%1 (%2).fastresume"_s.arg(validName).arg(++counter);
+        newFastresumePath = folderPath / Path(fastresumeExportFilename);
+    }
+
+    // Copy the fastresume file from the resume data storage directory
+    const Path sourceResumePath = m_resumeDataStorage->path() / Path(torrent->id().toString() + u".fastresume");
+    if (sourceResumePath.exists())
+    {
+        if (!Utils::Fs::copyFile(sourceResumePath, newFastresumePath))
+        {
+            LogMsg(tr("Failed to export fastresume. Torrent: \"%1\". Destination: \"%2\"")
+                   .arg(torrent->name(), newFastresumePath.toString()), Log::WARNING);
+        }
+    }
+    else
+    {
+        LogMsg(tr("Fastresume file not found. Torrent: \"%1\". Source: \"%2\"")
+               .arg(torrent->name(), sourceResumePath.toString()), Log::WARNING);
+    }
+}
+
 void SessionImpl::generateResumeData()
 {
     for (TorrentImpl *const torrent : asConst(m_torrents))
@@ -5245,6 +5302,9 @@ void SessionImpl::handleTorrentUrlSeedsRemoved(TorrentImpl *const torrent, const
 
 void SessionImpl::handleTorrentMetadataReceived(TorrentImpl *const torrent)
 {
+    // Export fastresume first, then torrent file to avoid race conditions in watched folders
+    if (isExportFastresumeEnabled() && !torrentExportDirectory().isEmpty())
+        exportFastresumeFile(torrent, torrentExportDirectory());
     if (!torrentExportDirectory().isEmpty())
         exportTorrentFile(torrent, torrentExportDirectory());
 
@@ -5422,6 +5482,10 @@ void SessionImpl::processPendingFinishedTorrents()
     {
         LogMsg(tr("Torrent download finished. Torrent: \"%1\"").arg(torrent->name()));
         emit torrentFinished(torrent);
+
+        // Export fastresume first, then torrent file to avoid race conditions in watched folders
+        if (isExportFinishedFastresumeEnabled() && !finishedTorrentExportDirectory().isEmpty())
+            exportFastresumeFile(torrent, finishedTorrentExportDirectory());
 
         if (const Path exportPath = finishedTorrentExportDirectory(); !exportPath.isEmpty())
             exportTorrentFile(torrent, exportPath);
@@ -5927,6 +5991,9 @@ TorrentImpl *SessionImpl::createTorrent(const lt::torrent_handle &nativeHandle, 
         // The following is useless for newly added magnet
         if (torrent->hasMetadata())
         {
+            // Export fastresume first, then torrent file to avoid race conditions in watched folders
+            if (isExportFastresumeEnabled() && !torrentExportDirectory().isEmpty())
+                exportFastresumeFile(torrent, torrentExportDirectory());
             if (!torrentExportDirectory().isEmpty())
                 exportTorrentFile(torrent, torrentExportDirectory());
         }

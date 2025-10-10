@@ -43,6 +43,8 @@ WatchedFolderOptionsDialog::WatchedFolderOptionsDialog(
 {
     m_ui->setupUi(this);
     m_ui->groupBoxParameters->layout()->addWidget(m_addTorrentParamsWidget);
+    m_ui->checkBoxRecursive->setChecked(watchedFolderOptions.recursive);
+    m_ui->checkBoxImportFastresume->setChecked(watchedFolderOptions.importFastresume);
 
     connect(m_ui->buttonBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
     connect(m_ui->buttonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
@@ -61,6 +63,7 @@ TorrentFilesWatcher::WatchedFolderOptions WatchedFolderOptionsDialog::watchedFol
     TorrentFilesWatcher::WatchedFolderOptions watchedFolderOptions;
     watchedFolderOptions.recursive = m_ui->checkBoxRecursive->isChecked();
     watchedFolderOptions.addTorrentParams = m_addTorrentParamsWidget->addTorrentParams();
+    watchedFolderOptions.importFastresume = m_ui->checkBoxImportFastresume->isChecked();
 
     return watchedFolderOptions;
 }

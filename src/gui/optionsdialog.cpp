@@ -624,6 +624,9 @@ void OptionsDialog::loadDownloadsTabOptions()
     if (!isExportDirEmpty)
         m_ui->textExportDir->setSelectedPath(session->torrentExportDirectory());
 
+    m_ui->checkExportFastresumeDir->setChecked(session->isExportFastresumeEnabled());
+    m_ui->checkExportFastresumeDir->setEnabled(m_ui->checkExportDir->isChecked());
+
     const bool isExportDirFinEmpty = session->finishedTorrentExportDirectory().isEmpty();
     m_ui->checkExportDirFin->setChecked(!isExportDirFinEmpty);
     m_ui->textExportDirFin->setDialogCaption(tr("Choose export directory"));
@@ -631,6 +634,9 @@ void OptionsDialog::loadDownloadsTabOptions()
     m_ui->textExportDirFin->setMode(FileSystemPathEdit::Mode::DirectorySave);
     if (!isExportDirFinEmpty)
         m_ui->textExportDirFin->setSelectedPath(session->finishedTorrentExportDirectory());
+
+    m_ui->checkExportFastresumeDirFin->setChecked(session->isExportFinishedFastresumeEnabled());
+    m_ui->checkExportFastresumeDirFin->setEnabled(m_ui->checkExportDirFin->isChecked());
 
     auto *watchedFoldersModel = new WatchedFoldersModel(TorrentFilesWatcher::instance(), this);
     connect(watchedFoldersModel, &QAbstractListModel::dataChanged, this, &ThisType::enableApplyButton);
@@ -715,8 +721,12 @@ void OptionsDialog::loadDownloadsTabOptions()
 
     connect(m_ui->checkExportDir, &QAbstractButton::toggled, this, &ThisType::enableApplyButton);
     connect(m_ui->checkExportDir, &QAbstractButton::toggled, m_ui->textExportDir, &QWidget::setEnabled);
+    connect(m_ui->checkExportDir, &QAbstractButton::toggled, m_ui->checkExportFastresumeDir, &QWidget::setEnabled);
+    connect(m_ui->checkExportFastresumeDir, &QAbstractButton::toggled, this, &ThisType::enableApplyButton);
     connect(m_ui->checkExportDirFin, &QAbstractButton::toggled, this, &ThisType::enableApplyButton);
     connect(m_ui->checkExportDirFin, &QAbstractButton::toggled, m_ui->textExportDirFin, &QWidget::setEnabled);
+    connect(m_ui->checkExportDirFin, &QAbstractButton::toggled, m_ui->checkExportFastresumeDirFin, &QWidget::setEnabled);
+    connect(m_ui->checkExportFastresumeDirFin, &QAbstractButton::toggled, this, &ThisType::enableApplyButton);
     connect(m_ui->textExportDir, &FileSystemPathEdit::selectedPathChanged, this, &ThisType::enableApplyButton);
     connect(m_ui->textExportDirFin, &FileSystemPathEdit::selectedPathChanged, this, &ThisType::enableApplyButton);
     connect(m_ui->checkUseDownloadPath, &QAbstractButton::toggled, this, &ThisType::enableApplyButton);
@@ -787,7 +797,9 @@ void OptionsDialog::saveDownloadsTabOptions() const
     session->setDownloadPath(m_ui->textDownloadPath->selectedPath());
     session->setTorrentExportDirectory(getTorrentExportDir());
     session->setFinishedTorrentExportDirectory(getFinishedTorrentExportDir());
-
+    session->setExportFastresumeEnabled(m_ui->checkExportFastresumeDir->isChecked());
+    session->setExportFinishedFastresumeEnabled(m_ui->checkExportFastresumeDirFin->isChecked());
+    
     auto *watchedFoldersModel = static_cast<WatchedFoldersModel *>(m_ui->scanFoldersView->model());
     watchedFoldersModel->apply();
 

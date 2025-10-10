@@ -253,12 +253,26 @@
                     </td>
                 </tr>
                 <tr>
+                    <td></td>
+                    <td>
+                        <input type="checkbox" id="exportdir_fastresume_checkbox">
+                        <label for="exportdir_fastresume_checkbox">QBT_TR(Also copy .fastresume files)QBT_TR[CONTEXT=OptionsDialog]</label>
+                    </td>
+                </tr>
+                <tr>
                     <td>
                         <input type="checkbox" id="exportdirfin_checkbox" onclick="qBittorrent.Preferences.updateExportDirFinEnabled();">
                         <label id="exportDirFinLabel" for="exportdirfin_checkbox">QBT_TR(Copy .torrent files for finished downloads to:)QBT_TR[CONTEXT=OptionsDialog]</label>
                     </td>
                     <td>
                         <input type="text" id="exportdirfin_text" class="pathDirectory" autocorrect="off" autocapitalize="none" aria-labelledby="exportDirFinLabel">
+                    </td>
+                </tr>
+                <tr>
+                    <td></td>
+                    <td>
+                        <input type="checkbox" id="exportdirfin_fastresume_checkbox">
+                        <label for="exportdirfin_fastresume_checkbox">QBT_TR(Also copy .fastresume files)QBT_TR[CONTEXT=OptionsDialog]</label>
                     </td>
                 </tr>
             </tbody>
@@ -272,6 +286,8 @@
                 <tr>
                     <th scope="col">QBT_TR(Monitored Folder)QBT_TR[CONTEXT=ScanFoldersModel]</th>
                     <th scope="col">QBT_TR(Override Save Location)QBT_TR[CONTEXT=ScanFoldersModel]</th>
+                    <th scope="col" title="Will watch the folder and all its subfolders. In Manual torrent management mode it will also add subfolder name to the selected Save path.">QBT_TR(Recursive mode)QBT_TR[CONTEXT=WatchedFolderOptionsDialog]</th>
+                    <th scope="col" title="If a .fastresume file with the same name exists in the watched folder, it will be imported and the torrent will not be rechecked.">QBT_TR(Import .fastresume files)QBT_TR[CONTEXT=WatchedFolderOptionsDialog]</th>
                 </tr>
             </thead>
             <tbody></tbody>
@@ -1830,7 +1846,7 @@ Use ';' to split multiple entries. Can use wildcard '*'.)QBT_TR[CONTEXT=OptionsD
             }
         };
 
-        const addWatchFolder = (folder = "", sel = "default_folder", other = "") => {
+        const addWatchFolder = (folder = "", sel = "default_folder", other = "", recursive = false, importFastresume = false) => {
             const pos = $("watched_folders_tab").getChildren("tbody")[0].getChildren("tr").length;
             const myinput = `<input id='text_watch_${pos}' type='text' value='${folder}'>`;
             const disableInput = (sel !== "other");
@@ -1843,8 +1859,10 @@ Use ';' to split multiple entries. Can use wildcard '*'.)QBT_TR[CONTEXT=OptionsD
                 + `<input id='cb_watch_txt_${pos}' type='text' ${disableInput ? "hidden " : ""}/>`
                 + `<img src='images/list-add.svg' id='addFolderImg_${pos}' alt='Add' style='padding-left:170px;width:16px;cursor:pointer;' onclick='qBittorrent.Preferences.addWatchFolder();'>`
                 + `</div>`;
+            const recursiveCheckbox = `<input id='cb_watch_recursive_${pos}' type='checkbox' ${recursive ? "checked" : ""}>`;
+            const importFastresumeCheckbox = `<input id='cb_watch_import_fastresume_${pos}' type='checkbox' ${importFastresume ? "checked" : ""}>`;
 
-            watchedFoldersTable.push([myinput, mycb]);
+            watchedFoldersTable.push([myinput, mycb, recursiveCheckbox, importFastresumeCheckbox]);
             $(`cb_watch_${pos}`).value = sel;
             if (disableInput) {
                 const elt = $(`cb_watch_${pos}`);
@@ -1863,15 +1881,29 @@ Use ';' to split multiple entries. Can use wildcard '*'.)QBT_TR[CONTEXT=OptionsD
             for (let i = 0; i < nb_folders; ++i) {
                 const fpath = $(`text_watch_${i}`).value.trim();
                 if (fpath.length > 0) {
-                    const sel = $(`cb_watch_${i}`).value.trim();
+                    const sel = document.getElementById(`cb_watch_${i}`).value.trim();
 
-                    let other;
-                    if (sel === "other")
-                        other = $(`cb_watch_txt_${i}`).value.trim();
-                    else
-                        other = (sel === "watch_folder") ? 0 : 1;
+                    let savePath;
+                    switch (sel) {
+                        case "watch_folder":
+                            savePath = 0;
+                            break;
+                        case "default_folder":
+                            savePath = 1;
+                            break;
+                        case "other":
+                            savePath = document.getElementById(`cb_watch_txt_${i}`).value.trim();
+                            break;
+                    }
 
-                    folders.set(fpath, other);
+                    const recursive = document.getElementById(`cb_watch_recursive_${i}`).checked;
+                    const importFastresume = document.getElementById(`cb_watch_import_fastresume_${i}`).checked;
+
+                    folders[fpath] = {
+                        save_path: savePath,
+                        recursive: recursive,
+                        import_fastresume: importFastresume
+                    };
                 }
             }
             return folders;
@@ -1885,11 +1917,13 @@ Use ';' to split multiple entries. Can use wildcard '*'.)QBT_TR[CONTEXT=OptionsD
         const updateExportDirEnabled = () => {
             const isExportDirEnabled = $("exportdir_checkbox").checked;
             $("exportdir_text").disabled = !isExportDirEnabled;
+            document.getElementById("exportdir_fastresume_checkbox").disabled = !isExportDirEnabled;
         };
 
         const updateExportDirFinEnabled = () => {
             const isExportDirFinEnabled = $("exportdirfin_checkbox").checked;
             $("exportdirfin_text").disabled = !isExportDirFinEnabled;
+            document.getElementById("exportdirfin_fastresume_checkbox").disabled = !isExportDirFinEnabled;
         };
 
         const updateMailNotification = () => {
@@ -2272,6 +2306,7 @@ Use ';' to split multiple entries. Can use wildcard '*'.)QBT_TR[CONTEXT=OptionsD
                         $("exportdir_checkbox").checked = false;
                         $("exportdir_text").value = "";
                     }
+                    document.getElementById("exportdir_fastresume_checkbox").checked = pref.export_fastresume_enabled;
                     updateExportDirEnabled();
                     if (pref.export_dir_fin !== "") {
                         $("exportdirfin_checkbox").checked = true;
@@ -2281,6 +2316,7 @@ Use ';' to split multiple entries. Can use wildcard '*'.)QBT_TR[CONTEXT=OptionsD
                         $("exportdirfin_checkbox").checked = false;
                         $("exportdirfin_text").value = "";
                     }
+                    document.getElementById("exportdirfin_fastresume_checkbox").checked = pref.export_fastresume_fin_enabled;
                     updateExportDirFinEnabled();
 
                     // Automatically add torrents from
@@ -2288,17 +2324,40 @@ Use ';' to split multiple entries. Can use wildcard '*'.)QBT_TR[CONTEXT=OptionsD
                         if (!Object.hasOwn(pref.scan_dirs, folder))
                             continue;
 
-                        const folderType = pref.scan_dirs[folder];
-                        let sel = "";
+                        document.getElementById("exportdirfin_fastresume_checkbox").checked = pref.export_fastresume_fin_enabled;
+                        let sel = "other";
                         let other = "";
-                        if (typeof folderType === "number") {
-                            sel = (folderType === 0) ? "watch_folder" : "default_folder";
+                        let recursive = false;
+                        let importFastresume = false;
+
+                        // Check if it's the new format (object) or old format (number/string)
+                        if (typeof folderData === "object" && folderData !== null) {
+                            // New format: {save_path, recursive, import_fastresume}
+                            const savePath = folderData.save_path;
+                            if (typeof savePath === "number") {
+                                sel = (savePath === 0) ? "watch_folder" : "default_folder";
+                                other = "";
+                            }
+                            else {
+                                sel = "other";
+                                other = savePath;
+                            }
+                            recursive = folderData.recursive || false;
+                            importFastresume = folderData.import_fastresume || false;
                         }
                         else {
-                            sel = "other";
-                            other = folderType;
+                            // Legacy format: number or string
+                            if (typeof folderData === "number") {
+                                sel = (folderData === 0) ? "watch_folder" : "default_folder";
+                                other = "";
+                            }
+                            else {
+                                sel = "other";
+                                other = folderData;
+                            }
                         }
-                        addWatchFolder(folder, sel, other);
+
+                        addWatchFolder(folder, sel, other, recursive, importFastresume);
                     }
                     addWatchFolder();
 
@@ -2674,10 +2733,12 @@ Use ';' to split multiple entries. Can use wildcard '*'.)QBT_TR[CONTEXT=OptionsD
                 settings["export_dir"] = $("exportdir_text").value;
             else
                 settings["export_dir"] = "";
+            settings["export_fastresume_enabled"] = document.getElementById("exportdir_fastresume_checkbox").checked;
             if ($("exportdirfin_checkbox").checked)
                 settings["export_dir_fin"] = $("exportdirfin_text").value;
             else
                 settings["export_dir_fin"] = "";
+            settings["export_fastresume_fin_enabled"] = document.getElementById("exportdirfin_fastresume_checkbox").checked;
 
             // Automatically add torrents from
             settings["scan_dirs"] = getWatchedFolders();
