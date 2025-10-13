@@ -650,6 +650,11 @@ void AppController::setPreferencesAction()
                             params.savePath = watchedFolder;
                             params.useAutoTMM = false;
                         }
+                        else if (intVal == 1)
+                        {
+                            params.savePath = Path();
+                            params.useAutoTMM = false;
+                        }
                     }
                     else if (!savePathValue.toString().isEmpty())
                     {
@@ -671,6 +676,11 @@ void AppController::setPreferencesAction()
                         if (intVal == 0)
                         {
                             params.savePath = watchedFolder;
+                            params.useAutoTMM = false;
+                        }
+                        else if (intVal == 1)
+                        {
+                            params.savePath = Path();
                             params.useAutoTMM = false;
                         }
                     }
